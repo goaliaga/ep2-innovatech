@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  frontend:
+    container_name: frontend_despacho
+    image: goaliaga/frontend-despacho:latest
+    ports:
+      - "80:80"
+    restart: always
+
+networks:
+  default:
+    driver: bridge

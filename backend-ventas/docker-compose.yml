@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  api_ventas:
+    container_name: api_ventas
+    image: goaliaga/api-ventas:latest
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    restart: always
+    volumes:
+      - ventas_logs:/app/logs
+
+volumes:
+  ventas_logs:

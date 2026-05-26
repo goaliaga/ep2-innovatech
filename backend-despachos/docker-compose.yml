@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  api_despachos:
+    container_name: api_despachos
+    image: goaliaga/api-despachos:latest
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env
+    restart: always
+    volumes:
+      - despachos_logs:/app/logs
+
+volumes:
+  despachos_logs:
