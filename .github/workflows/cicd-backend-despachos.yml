@@ -1,0 +1,81 @@
+name: CI/CD Backend Despachos
+
+on:
+  push:
+    branches: ["deploy"]
+    paths:
+      - 'backend-despachos/**'
+
+env:
+  DOCKERHUB_NAMESPACE: goaliaga
+  BACK_IMAGE: api-despachos
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login en Docker Hub
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" \
+          | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Generar tag de imagen
+        id: tags
+        run: |
+          VERSION="1.0.${GITHUB_RUN_NUMBER}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Construir y publicar imagen Backend Despachos
+        run: |
+          IMAGE="${DOCKERHUB_NAMESPACE}/${BACK_IMAGE}"
+          docker build \
+            -f backend-despachos/Dockerfile \
+            -t "${IMAGE}:${{ steps.tags.outputs.VERSION }}" \
+            -t "${IMAGE}:latest" \
+            backend-despachos
+          docker push "${IMAGE}:${{ steps.tags.outputs.VERSION }}"
+          docker push "${IMAGE}:latest"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    env:
+      AWS_REGION: us-east-1
+      BACKEND_INSTANCE_ID: ${{ secrets.EC2_DESPACHOS_INSTANCE_ID }}
+      BACKEND_APP_DIR: /home/ec2-user/app
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar AWS credentials
+        run: |
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOF
+          [default]
+          aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_session_token=${{ secrets.AWS_SESSION_TOKEN }}
+          EOF
+          cat > ~/.aws/config << EOF
+          [default]
+          region=${AWS_REGION}
+          output=json
+          EOF
+
+      - name: Deploy backend despachos por SSM
+        run: |
+          aws ssm send-command \
+            --region "${AWS_REGION}" \
+            --document-name "AWS-RunShellScript" \
+            --instance-ids "${BACKEND_INSTANCE_ID}" \
+            --parameters commands="[
+              \"cd ${BACKEND_APP_DIR}\",
+              \"docker compose pull\",
+              \"docker compose up -d\"
+            ]"
